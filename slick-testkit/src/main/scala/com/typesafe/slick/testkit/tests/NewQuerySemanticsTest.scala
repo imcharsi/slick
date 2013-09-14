@@ -73,7 +73,7 @@ class NewQuerySemanticsTest extends TestkitTest[RelationalTestDB] {
       ("French_Roast_Decaf", 49, 999, 5, 0)
     )
 
-    def show(name: String, g: Query[_,_]) =
+    def show[C[_]](name: String, g: Query[_,_, C]) =
       println("=========================================== "+name)
 
     val qa = for {

@@ -1,6 +1,6 @@
 package scala.slick.driver
 
-import scala.language.implicitConversions
+import scala.language.{implicitConversions, higherKinds}
 import scala.slick.ast.{Node, TypedType, BaseTypedType}
 import scala.slick.compiler.{Phase, QueryCompiler}
 import scala.slick.lifted._
@@ -34,21 +34,21 @@ trait JdbcProfile extends SqlProfile with JdbcTableComponent
   final def buildSequenceSchemaDescription(seq: Sequence[_]): DDL = createSequenceDDLBuilder(seq).buildDDL
 
   trait LowPriorityImplicits {
-    implicit def queryToAppliedQueryInvoker[T, U](q: Query[T, _ <: U]): UnitQueryInvoker[U] = createUnitQueryInvoker[U](queryCompiler.run(q.toNode).tree)
-    implicit def queryToUpdateInvoker[E, U](q: Query[E, U]): UpdateInvoker[U] = createUpdateInvoker(updateCompiler.run(q.toNode).tree, ())
+    implicit def queryToAppliedQueryInvoker[T, U, C[_]](q: Query[T, _ <: U, C]): UnitQueryInvoker[U] = createUnitQueryInvoker[U](queryCompiler.run(q.toNode).tree)
+    implicit def queryToUpdateInvoker[E, U, C[_]](q: Query[E, U, C]): UpdateInvoker[U] = createUpdateInvoker(updateCompiler.run(q.toNode).tree, ())
   }
 
   trait Implicits extends LowPriorityImplicits with super.Implicits with ImplicitColumnTypes {
     implicit def ddlToDDLInvoker(d: DDL): DDLInvoker = new DDLInvoker(d)
-    implicit def queryToDeleteInvoker(q: Query[_ <: Table[_], _]): DeleteInvoker = createDeleteInvoker(deleteCompiler.run(q.toNode).tree, ())
-    implicit def runnableCachedToAppliedQueryInvoker[RU](c: RunnableCached[_ <: Query[_, _], Seq[RU]]): MutatingUnitInvoker[RU] = createQueryInvoker[Any, RU](c.compiledQuery)(c.param)
-    implicit def runnableCachedToUpdateInvoker[RU](c: RunnableCached[_ <: Query[_, _], Seq[RU]]): UpdateInvoker[RU] =
+    implicit def queryToDeleteInvoker[C[_]](q: Query[_ <: Table[_], _, C]): DeleteInvoker = createDeleteInvoker(deleteCompiler.run(q.toNode).tree, ())
+    implicit def runnableCachedToAppliedQueryInvoker[RU, C[_]](c: RunnableCached[_ <: Query[_, _, C], Seq[RU]]): MutatingUnitInvoker[RU] = createQueryInvoker[Any, RU](c.compiledQuery)(c.param)
+    implicit def runnableCachedToUpdateInvoker[RU, C[_]](c: RunnableCached[_ <: Query[_, _, C], Seq[RU]]): UpdateInvoker[RU] =
       createUpdateInvoker(c.compiledUpdate, c.param)
-    implicit def runnableCachedToDeleteInvoker[RU](c: RunnableCached[_ <: Query[_, _], Seq[RU]]): DeleteInvoker =
+    implicit def runnableCachedToDeleteInvoker[RU, C[_]](c: RunnableCached[_ <: Query[_, _, C], Seq[RU]]): DeleteInvoker =
       createDeleteInvoker(c.compiledDelete, c.param)
 
     // This conversion only works for fully packed types
-    implicit def productQueryToUpdateInvoker[T](q: Query[_ <: ColumnBase[T], T]): UpdateInvoker[T] =
+    implicit def productQueryToUpdateInvoker[T, C[_]](q: Query[_ <: ColumnBase[T], T, C]): UpdateInvoker[T] =
       createUpdateInvoker(updateCompiler.run(q.toNode).tree, ())
   }
 

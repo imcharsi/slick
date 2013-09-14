@@ -40,7 +40,7 @@ trait RelationalProfile extends BasicProfile with RelationalTableComponent
 
     /** Create a `Cached` query which selects all rows where the specified
       * key matches the parameter value. */
-    def findBy[P](f: (T => Column[P]))(implicit tm: TypedType[P]): CachedFunction[Column[P] => Query[T, U], Column[P], P, Query[T, U], Seq[U]] = {
+    def findBy[P](f: (T => Column[P]))(implicit tm: TypedType[P]): CachedFunction[Column[P] => Query[T, U, Seq], Column[P], P, Query[T, U, Seq], Seq[U]] = {
       import driver.Implicit._
       Cached { (p: Column[P]) => q.filter(table => Library.==.column[Boolean](f(table).toNode, p.toNode)) }
     }
