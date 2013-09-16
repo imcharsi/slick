@@ -44,14 +44,14 @@ abstract class AbstractTable[T](val tableTag: Tag, val schemaName: Option[String
       (name: String, sourceColumns: P, targetTableQuery: TableQuery[TT, _])
       (targetColumns: TT => P, onUpdate: ForeignKeyAction = ForeignKeyAction.NoAction,
        onDelete: ForeignKeyAction = ForeignKeyAction.NoAction)(implicit unpack: Shape[_ <: ShapeLevel.Flat, TT, U, _], unpackp: Shape[_ <: ShapeLevel.Flat, P, PU, _]): ForeignKeyQuery[TT, U] = {
-    val targetTable: TT = targetTableQuery.unpackable.value
-    val q = Query[TT, U, TT](targetTable)(Shape.repShape.asInstanceOf[Shape[ShapeLevel.Flat, TT, U, TT]])
+    val targetTable: TT = targetTableQuery.shaped.value
+    val q = targetTableQuery.asInstanceOf[Query[TT, U, Seq]]
     val generator = new AnonSymbol
-    val aliased = q.unpackable.encodeRef(generator :: Nil)
+    val aliased = q.shaped.encodeRef(generator :: Nil)
     val fv = Library.==.typed[Boolean](unpackp.toNode(targetColumns(aliased.value)), unpackp.toNode(sourceColumns))
-    val fk = ForeignKey(name, toNode, q.unpackable.asInstanceOf[ShapedValue[TT, _]],
+    val fk = ForeignKey(name, toNode, q.shaped.asInstanceOf[ShapedValue[TT, _]],
       targetTable, unpackp, sourceColumns, targetColumns, onUpdate, onDelete)
-    new ForeignKeyQuery[TT, U](Filter.ifRefutable(generator, q.toNode, fv), q.unpackable, IndexedSeq(fk), q, generator, aliased.value)
+    new ForeignKeyQuery[TT, U](Filter.ifRefutable(generator, q.toNode, fv), q.shaped, IndexedSeq(fk), q, generator, aliased.value)
   }
 
   def primaryKey[T](name: String, sourceColumns: T)(implicit shape: Shape[_ <: ShapeLevel.Flat, T, _, _]): PrimaryKey = PrimaryKey(name, ExtraUtil.linearizeFieldRefs(shape.toNode(sourceColumns)))

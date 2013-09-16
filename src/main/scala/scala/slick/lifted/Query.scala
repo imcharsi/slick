@@ -12,28 +12,28 @@ import ScalaBaseType._
   * collection type (Rep[Seq[T]]). It is parameterized with both, the mixed
   * type (the type of values you see e.g. when you call map()) and the unpacked
   * type (the type of values that you get back when you run the query).  */
-abstract class Query[+E, U, C[_]] extends Rep[C[U]] { self =>
+sealed abstract class Query[+E, U, C[_]] extends Rep[C[U]] { self =>
 
-  def unpackable: ShapedValue[_ <: E, U]
-  final lazy val packed = unpackable.toNode
+  def shaped: ShapedValue[_ <: E, U]
+  final lazy val packed = shaped.toNode
 
   def flatMap[F, T, D[_]](f: E => Query[F, T, D]): Query[F, T, C] = {
     val generator = new AnonSymbol
-    val aliased = unpackable.encodeRef(generator :: Nil).value
+    val aliased = shaped.encodeRef(generator :: Nil).value
     val fv = f(aliased)
-    new WrappingQuery[F, T, C](new Bind(generator, toNode, fv.toNode), fv.unpackable)
+    new WrappingQuery[F, T, C](new Bind(generator, toNode, fv.toNode), fv.shaped)
   }
 
   def map[F, G, T](f: E => F)(implicit shape: Shape[_ <: ShapeLevel.Flat, F, T, G]): Query[G, T, C] =
-    flatMap(v => Query.pure[F, T, G](f(v)))
+    flatMap(v => Query[F, T, G](f(v)))
 
   def >>[F, T, D[_]](q: Query[F, T, D]): Query[F, T, C] = flatMap(_ => q)
 
   def filter[T](f: E => T)(implicit wt: CanBeQueryCondition[T]): Query[E, U, C] = {
     val generator = new AnonSymbol
-    val aliased = unpackable.encodeRef(generator :: Nil)
+    val aliased = shaped.encodeRef(generator :: Nil)
     val fv = f(aliased.value)
-    new WrappingQuery[E, U, C](Filter.ifRefutable(generator, toNode, wt(fv).toNode), unpackable)
+    new WrappingQuery[E, U, C](Filter.ifRefutable(generator, toNode, wt(fv).toNode), shaped)
   }
 
   def withFilter[T : CanBeQueryCondition](f: E => T) = filter(f)
@@ -42,8 +42,8 @@ abstract class Query[+E, U, C[_]] extends Rep[C[U]] { self =>
 
   def join[E2, U2, D[_]](q2: Query[E2, U2, D], jt: JoinType = JoinType.Inner) = {
     val leftGen, rightGen = new AnonSymbol
-    val aliased1 = unpackable.encodeRef(leftGen :: Nil)
-    val aliased2 = q2.unpackable.encodeRef(rightGen :: Nil)
+    val aliased1 = shaped.encodeRef(leftGen :: Nil)
+    val aliased2 = q2.shaped.encodeRef(rightGen :: Nil)
     new BaseJoinQuery[E, E2, U, U2, C](leftGen, rightGen, toNode, q2.toNode, jt, aliased1.zip(aliased2))
   }
   def innerJoin[E2, U2, D[_]](q2: Query[E2, U2, D]) = join(q2, JoinType.Inner)
@@ -55,37 +55,37 @@ abstract class Query[+E, U, C[_]] extends Rep[C[U]] { self =>
     join(q2, JoinType.Zip).map[F, G, T](x => f(x._1, x._2))
   def zipWithIndex = {
     val leftGen, rightGen = new AnonSymbol
-    val aliased1 = unpackable.encodeRef(leftGen :: Nil)
+    val aliased1 = shaped.encodeRef(leftGen :: Nil)
     val aliased2 = ShapedValue(Column.forNode[Long](Ref(rightGen)), Shape.columnShape[Long, ShapeLevel.Flat])
     new BaseJoinQuery[E, Column[Long], U, Long, C](leftGen, rightGen, toNode, RangeFrom(0L), JoinType.Zip, aliased1.zip(aliased2))
   }
 
   def sortBy[T <% Ordered](f: E => T): Query[E, U, C] = {
     val generator = new AnonSymbol
-    val aliased = unpackable.encodeRef(generator :: Nil)
-    new WrappingQuery[E, U, C](SortBy(generator, toNode, f(aliased.value).columns), unpackable)
+    val aliased = shaped.encodeRef(generator :: Nil)
+    new WrappingQuery[E, U, C](SortBy(generator, toNode, f(aliased.value).columns), shaped)
   }
 
   def sorted(implicit ev: (E => Ordered)): Query[E, U, C] = sortBy(identity)
 
   def groupBy[K, T, G, P](f: E => K)(implicit kshape: Shape[_ <: ShapeLevel.Flat, K, T, G], vshape: Shape[_ <: ShapeLevel.Flat, E, _, P]): Query[(G, Query[P, U, Seq]), (T, Query[P, U, Seq]), C] = {
     val sym = new AnonSymbol
-    val key = ShapedValue(f(unpackable.encodeRef(sym :: Nil).value), kshape).packedValue
+    val key = ShapedValue(f(shaped.encodeRef(sym :: Nil).value), kshape).packedValue
     val value = ShapedValue(pack.as[Seq], Shape.repShape.asInstanceOf[Shape[ShapeLevel.Flat, Query[P, U, Seq], Query[P, U, Seq], Query[P, U, Seq]]])
     val group = GroupBy(sym, toNode, key.toNode)
     new WrappingQuery[(G, Query[P, U, Seq]), (T, Query[P, U, Seq]), C](group, key.zip(value))
   }
 
   def encodeRef(path: List[Symbol]): Query[E, U, C] = new Query[E, U, C] {
-    val unpackable = self.unpackable.encodeRef(path)
+    val shaped = self.shaped.encodeRef(path)
     lazy val toNode = Path(path)
   }
 
   def union[O >: E, R, D[_]](other: Query[O, U, D]) =
-    new WrappingQuery[O, U, C](Union(toNode, other.toNode, false), unpackable)
+    new WrappingQuery[O, U, C](Union(toNode, other.toNode, false), shaped)
 
   def unionAll[O >: E, R, D[_]](other: Query[O, U, D]) =
-    new WrappingQuery[O, U, C](Union(toNode, other.toNode, true), unpackable)
+    new WrappingQuery[O, U, C](Union(toNode, other.toNode, true), shaped)
 
   def ++[O >: E, R, D[_]](other: Query[O, U, D]) = unionAll(other)
 
@@ -95,33 +95,28 @@ abstract class Query[+E, U, C[_]] extends Rep[C[U]] { self =>
 
   def pack[R](implicit packing: Shape[_ <: ShapeLevel.Flat, E, _, R]): Query[R, U, C] =
     new Query[R, U, C] {
-      val unpackable: ShapedValue[_ <: R, U] = self.unpackable.packedValue(packing)
+      val shaped: ShapedValue[_ <: R, U] = self.shaped.packedValue(packing)
       def toNode = self.toNode
     }
 
   def as[D[_]]: Query[E, U, D] = new Query[E, U, D] {
-    val unpackable = self.unpackable
+    val shaped = self.shaped
     def toNode = self.toNode
   }
 
-  def take(num: Int): Query[E, U, C] = new WrappingQuery[E, U, C](Take(toNode, num), unpackable)
-  def drop(num: Int): Query[E, U, C] = new WrappingQuery[E, U, C](Drop(toNode, num), unpackable)
+  def take(num: Int): Query[E, U, C] = new WrappingQuery[E, U, C](Take(toNode, num), shaped)
+  def drop(num: Int): Query[E, U, C] = new WrappingQuery[E, U, C](Drop(toNode, num), shaped)
 }
 
-object Query extends Query[Unit, Unit, Seq] {
-  def toNode = packed
-  def unpackable = ShapedValue((), Shape.unitShape[ShapeLevel.Flat])
-
+object Query {
   def apply[E, U, R](value: E)(implicit unpack: Shape[_ <: ShapeLevel.Flat, E, U, R]): Query[R, U, Seq] = {
-    val unpackable = ShapedValue(value, unpack).packedValue
-    if(unpackable.toNode.isInstanceOf[TableExpansion])
-      new NonWrappingQuery[R, U, Seq](unpackable.toNode, unpackable)
-    else new WrappingQuery[R, U, Seq](Pure(unpackable.toNode), unpackable)
+    val shaped = ShapedValue(value, unpack).packedValue
+    new WrappingQuery[R, U, Seq](Pure(shaped.toNode), shaped)
   }
 
-  def pure[E, U, R](value: E)(implicit unpack: Shape[_ <: ShapeLevel.Flat, E, U, R]): Query[R, U, Seq] = {
-    val unpackable = ShapedValue(value, unpack).packedValue
-    new WrappingQuery[R, U, Seq](Pure(unpackable.toNode), unpackable)
+  def empty: Query[Unit, Unit, Seq] = new Query[Unit, Unit, Seq] {
+    val toNode = shaped.toNode
+    def shaped = ShapedValue((), Shape.unitShape[ShapeLevel.Flat])
   }
 }
 
@@ -141,27 +136,25 @@ object CanBeQueryCondition {
 }
 
 class WrappingQuery[+E, U, C[_]](val toNode: Node, val base: ShapedValue[_ <: E, U]) extends Query[E, U, C] {
-  lazy val unpackable = base.encodeRef(toNode.nodeIntrinsicSymbol :: Nil)
+  lazy val shaped = base.encodeRef(toNode.nodeIntrinsicSymbol :: Nil)
 }
-
-class NonWrappingQuery[+E, U, C[_]](val toNode: Node, val unpackable: ShapedValue[_ <: E, U]) extends Query[E, U, C]
 
 final class BaseJoinQuery[+E1, +E2, U1, U2, C[_]](leftGen: Symbol, rightGen: Symbol, left: Node, right: Node, jt: JoinType, base: ShapedValue[_ <: (E1, E2), (U1, U2)])
     extends WrappingQuery[(E1, E2), (U1,  U2), C](AJoin(leftGen, rightGen, left, right, jt, LiteralNode(true)), base) {
-  def on[T <: Column[_]](pred: (E1, E2) => T)(implicit wt: CanBeQueryCondition[T]) =
+  def on[T <: Column[_]](pred: (E1, E2) => T)(implicit wt: CanBeQueryCondition[T]): Query[(E1, E2), (U1, U2), C] =
     new WrappingQuery[(E1, E2), (U1, U2), C](AJoin(leftGen, rightGen, left, right, jt, wt(pred(base.value._1, base.value._2)).toNode), base)
 }
 
 /** Represents a database table. Profiles add extension methods to TableQuery
   * for operations that can be performed on tables but not on arbitrary
   * queries, e.g. getting the table DDL. */
-final class TableQuery[+E <: AbstractTable[_], U](shaped: ShapedValue[_ <: E, U])
-  extends NonWrappingQuery[E, U, Seq](shaped.toNode, shaped) {
+final class TableQuery[+E <: AbstractTable[_], U](val shaped: ShapedValue[_ <: E, U]) extends Query[E, U, Seq] {
+  val toNode = shaped.toNode
 
   /** Get the "raw" table row that represents the table itself, as opposed to
     * a Path for a variable of the table's type. This method should generally
     * not be called from user code. */
-  def baseTableRow: E = unpackable.value
+  def baseTableRow: E = shaped.value
 }
 
 object TableQuery {
