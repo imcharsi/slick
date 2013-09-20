@@ -3,6 +3,8 @@ package scala.slick.lifted
 import scala.language.higherKinds
 import scala.language.experimental.macros
 import scala.annotation.implicitNotFound
+import scala.collection.generic.CanBuild
+import scala.reflect.ClassTag
 import scala.reflect.macros.Context
 import scala.slick.ast.{Join => AJoin, _}
 import FunctionSymbolExtensionMethods._
@@ -99,9 +101,9 @@ sealed abstract class Query[+E, U, C[_]] extends Rep[C[U]] { self =>
       def toNode = self.toNode
     }
 
-  def as[D[_]]: Query[E, U, D] = new Query[E, U, D] {
+  def as[D[X] <: Iterable[X]](implicit cbf: CanBuild[Any, D[Any]], tag: ClassTag[D[_]]): Query[E, U, D] = new Query[E, U, D] {
     val shaped = self.shaped
-    def toNode = self.toNode
+    def toNode = CollectionCast(self.toNode, CollectionTypeConstructor.forColl[D])
   }
 
   def take(num: Int): Query[E, U, C] = new WrappingQuery[E, U, C](Take(toNode, num), shaped)
