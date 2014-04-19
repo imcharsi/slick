@@ -123,16 +123,38 @@ sealed abstract class Query[+E, U, C[_]] extends Rep[C[U]] { self =>
   /** Return a new query containing the elements from both operands. Duplicate
     * elements are eliminated from the result. */
   def union[O >: E, R, D[_]](other: Query[O, U, D]) =
-    new WrappingQuery[O, U, C](Union(toNode, other.toNode, false), shaped)
+    new WrappingQuery[O, U, C](SetBinaryOperator(toNode, other.toNode, Library.Union), shaped)
 
   /** Return a new query containing the elements from both operands. Duplicate
     * elements are preserved. */
   def unionAll[O >: E, R, D[_]](other: Query[O, U, D]) =
-    new WrappingQuery[O, U, C](Union(toNode, other.toNode, true), shaped)
+    new WrappingQuery[O, U](SetBinaryOperator(toNode, other.toNode, Library.UnionAll), shaped)
+    
+  /** Return a new query containing the elements from intersection of both operands. Duplicate
+    * elements are eliminated. */
+  def intersect[O >: E, R, D[_]](other: Query[O, U, D]) =
+    new WrappingQuery[O, U](SetBinaryOperator(toNode, other.toNode, Library.Intersect), shaped)
+    
+  /** Return a new query containing the elements from expect (minus) of both operands. Duplicate
+    * elements are eliminated. */
+  def diff[O >: E, R, D[_]](other: Query[O, U, D]) =
+    new WrappingQuery[O, U](SetBinaryOperator(toNode, other.toNode, Library.Except), shaped)
 
   /** Return a new query containing the elements from both operands. Duplicate
     * elements are preserved. */
   def ++[O >: E, R, D[_]](other: Query[O, U, D]) = unionAll(other)
+
+  /** Return a new query containing the elements from both operands. Duplicate
+    * elements are eliminated. */
+  def |[O >: E, R, D[_]](other: Query[O, U, D]) = union(other) 
+  
+  /** Return a new query containing the elements from intersection of both operands. Duplicate
+    * elements are eliminated. */
+  def &[O >: E, R, D[_]](other: Query[O, U, D]) = intersect(other)
+
+  /** Return a new query containing the elements from expect (minus) of both operands. Duplicate
+    * elements are eliminated. */
+  def &~[O >: E, R, D[_]](other: Query[O, U, D]) = diff(other)
 
   /** The total number of elements (i.e. rows). */
   def length: Column[Int] = Library.CountAll.column(toNode)

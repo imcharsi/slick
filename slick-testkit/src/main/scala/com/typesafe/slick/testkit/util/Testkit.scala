@@ -43,7 +43,7 @@ object Testkit {
     classOf[tk.SequenceTest] ::
     classOf[tk.TemplateTest] ::
     classOf[tk.TransactionTest] ::
-    classOf[tk.UnionTest] ::
+    classOf[tk.SetBinaryOperatorTest] ::
     (Nil: List[Class[_ <: TestkitTest[_ >: Null <: TestDB]]])
 }
 
