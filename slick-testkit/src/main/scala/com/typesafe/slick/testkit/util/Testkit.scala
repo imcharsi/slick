@@ -44,6 +44,8 @@ object Testkit {
     classOf[tk.TemplateTest] ::
     classOf[tk.TransactionTest] ::
     classOf[tk.SetBinaryOperatorTest] ::
+    classOf[tk.PgInheritTest] ::
+    classOf[tk.WindowFuncTest] ::
     (Nil: List[Class[_ <: TestkitTest[_ >: Null <: TestDB]]])
 }
 
