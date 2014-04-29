@@ -65,7 +65,7 @@ trait JdbcMappingCompilerComponent { driver: JdbcDriver =>
           val sbr = f(driver.createQueryBuilder(ss, state))
           CompiledStatement(sbr.sql, sbr, ss.nodeType)
         }
-        val nmap = (new MappingCompiler).compileMapping(rsm.map)
+        val nmap = createMappingCompiler.compileMapping(rsm.map)
         rsm.copy(from = nfrom, map = nmap).nodeTyped(rsm.nodeType)
       }
   }
